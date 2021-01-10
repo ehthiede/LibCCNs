@@ -1,0 +1,4 @@
+Scripts for using pytorch geometric datasets with CCN.  TGMGraph (Torch GeoMetric Graph) wraps a torch geometric batch object, allowing it to be used in CCN.
+
+Currently, a training script for the torch_geometric Zinc library is provided (specifically a subset of the molecules, speeding training time).
+Applying CCN to other problems may require light modification.
