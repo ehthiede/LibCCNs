@@ -1,10 +1,6 @@
 # Graph class
 import torch
 import numpy as np
-try:
-    import torch_geometric
-except:
-    torch_geometric = None
 
 
 class Graph(object):
@@ -81,48 +77,3 @@ class Graph(object):
         self.label = np.array(self.label)
         print('self.label', self.label)
         raise Exception
-
-
-class TGMGraph(object):
-    def __init__(self, batch, construct_adj=True, nAtomicTypes=None):
-        """
-        Initializes a the graph from a TGM data object.
-
-        Arguments
-        ---------
-        batch: Batch object
-            The torch geometric batch object we are grabbing the data from.
-        construct_adj : bool
-            If True, construct the (dense) adjacency matrix.  This is
-            False by default, since the adjacency matrix can be expensive.
-        """
-        self.nMolecules = batch.num_graphs
-        self.nVertices = batch.num_nodes
-        self.nEdges = batch.num_edges
-        if nAtomicTypes is None:
-            nAtomicTypes = torch.max(batch.x)+1
-        self.nAtomicTypes = nAtomicTypes
-
-        # Batch properties
-        self.start_index = []
-        last_val = 0
-        for i, val in enumerate(batch.batch):
-            if val > last_val:
-                self.start_vals.append(i)
-                last_val == val
-        self.start_index = torch.tensor(self.start_index).long()
-
-        # Vertex Properties
-        index_tensor = torch.LongTensor([torch.arange(self.nVertices),
-                                         batch.x.squeeze(1)])
-        self.feature = torch.sparse.FloatTensor(index_tensor, torch.ones(self.nVertices), torch.Size([self.nVertices, nAtomicTypes]))
-
-        # Edge properties
-        self.edges_tensor = batch.edge_index.T
-        self.label = batch.y
-
-        # Construct optional adjacency matrix
-        if torch_geometric is None:
-            raise ImportError("torch_geometric not found")
-        if construct_adj:
-            self.adj = torch_geometric.utils.to_dense_adj(batch.edge_index)
