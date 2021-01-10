@@ -27,15 +27,15 @@ class TGMGraph(object):
         last_val = 0
         for i, val in enumerate(batch.batch):
             if val > last_val:
-                self.start_vals.append(i)
-                last_val == val
-        self.start_index = torch.tensor(self.start_index).long()
+                self.start_index.append(i)
+                last_val = val
+        self.start_index = torch.tensor(self.start_index).int()
 
         # Vertex Properties
-        self.x = batch.x
+        self.x = batch.x.squeeze(1)  # x is a N x 1 tensor of ints
 
         # Edge properties
-        self.edges_tensor = batch.edge_index.T
+        self.edges_tensor = batch.edge_index.T.float()
         self.label = batch.y
 
         # Construct optional adjacency matrix

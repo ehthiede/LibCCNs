@@ -1,4 +1,7 @@
-# Training program for Covariant Compositional Networks (CCN) 1D
+"""
+Example training program for Torch Geometric datasets.
+Runs on a subset of the ZINC dataset.
+"""
 
 # from absl import flags
 # from absl import app
@@ -8,6 +11,7 @@ import torch
 import CCN1D
 from TGMGraph import TGMGraph
 from torch_geometric.datasets import ZINC
+from torch import optim
 from torch_geometric.data import DataLoader
 from tqdm import tqdm
 
@@ -18,20 +22,21 @@ device = torch.device("cpu")
 def build_parser():
     parser = argparse.ArgumentParser(description='Command description.')
     parser.add_argument('--data_dir', type=str, default='', help='Dataset directory')
-    parser.add_argument('--data_name', type=str, default='', help='Data name')
     parser.add_argument('--epochs', type=int, default=1024, help='Number of epochs')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
     parser.add_argument('--initial_hidden', type=int, default=16, help='Input size')
     parser.add_argument('--message_sizes', type=str, default='', help='Message sizes')
     parser.add_argument('--message_mlp_sizes', type=str, default='', help='Multi-layer perceptron sizes')
     parser.add_argument('--nThreads', type=int, default=14, help='Number of threads')
-    parser.add_argument('--batch_size', type=int, default=10, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
     parser.add_argument('--activation', type=str, default='relu', help='Activation')
-    parser.add_argument('--fold', type=int, default=0, help='Fold number')
     return parser
 
 
 def train_epoch(train_loader, model, optimizer):
+    """
+    Trains a single epoch.
+    """
     # Molecular graphs concatenation
     total_train_loss = 0
     for batch in tqdm(train_loader):
@@ -43,7 +48,7 @@ def train_epoch(train_loader, model, optimizer):
         loss = torch.nn.functional.l1_loss(output.squeeze(), graph.label)
         loss.backward()
         optimizer.step()
-        total_train_loss += loss.item() * graph.num_graphs
+        total_train_loss += loss.item() * graph.nMolecules
 
     return total_train_loss / len(train_loader.dataset)
 
@@ -56,11 +61,14 @@ def val_epoch(val_loader, model):
         graph = TGMGraph(batch, construct_adj=False)
         output = model(graph)
         loss = torch.nn.functional.l1_loss(output.squeeze(), graph.label)
-        total_train_loss += loss.item() * graph.num_graphs
+        total_train_loss += loss.item() * graph.nMolecules
     return total_train_loss / len(val_loader.dataset)
 
 
 def setup_data_loaders(data_folder, batch_size=32, run_test=False, num_workers=3):
+    """
+    Sets up the dataloaders.
+    """
     train_dataset = ZINC(data_folder, subset=True, split='train')
     val_dataset = ZINC(data_folder, subset=True, split='val')
     if run_test:
@@ -92,15 +100,16 @@ def main(args=None):
     train_loader, val_loader, __ = setup_data_loaders(data_dir, batch_size)
 
     # Model creation
-    initial_hidden = [initial_hidden]
-
     model = CCN1D.CCN1D(initial_hidden, message_sizes, message_mlp_sizes, 1, nThreads, activation)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, amsgrad=True)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5,
+                                                     patience=20, min_lr=0.00005)
 
     print('\n--- Training -------------------------------')
 
     for epoch in range(epochs):
-        print('\nEpoch ' + str(epoch))
+        lr = scheduler.optimizer.param_groups[0]['lr']
+        print('\nEpoch ' + str(epoch), ' lr: ', lr)
 
         start_time = time.time()
         train_loss = train_epoch(train_loader, model, optimizer)
@@ -112,11 +121,12 @@ def main(args=None):
 
         # Validation
         start_time = time.time()
-        val_loss = train_epoch(train_loader, model, optimizer)
+        val_loss = val_epoch(train_loader, model)
         end_time = time.time()
 
         print('Testing time = ' + str(end_time - start_time))
         print('Testing accuracy = ' + str(val_loss))
+        scheduler.step(val_loss)
 
 
 if __name__ == '__main__':

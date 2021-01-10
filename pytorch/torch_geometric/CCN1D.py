@@ -1,4 +1,6 @@
 # CCN1D class
+import sys
+sys.path.append('../ccn_lib/')
 from ccn1d_normalizing import ccn1d_normalizing
 from ccn1d_shrinking import ccn1d_shrinking
 from ccn1d_contractions import ccn1d_contractions
@@ -6,9 +8,6 @@ import ccn1d_lib
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-import sys
-sys.path.append('../ccn_lib/')
 
 
 torch.manual_seed(123456789)
@@ -52,7 +51,7 @@ class CCN1D(nn.Module):
         self.message_weights = []
         for layer in range(self.nLayers):
             if layer == 0:
-                d1 = self.input_size[1] * self.nContractions
+                d1 = self.initial_hidden * self.nContractions
             else:
                 d1 = self.message_sizes[layer - 1] * self.nContractions
             d2 = self.message_sizes[layer]
@@ -78,7 +77,7 @@ class CCN1D(nn.Module):
 
         self.message_params = torch.nn.ParameterList([item for sublist in self.message_weights for item in sublist])
 
-        self.num_final_features = self.input_size[1] + sum(self.message_sizes)
+        self.num_final_features = self.initial_hidden + sum(self.message_sizes)
         self.fully_connected_2 = nn.Linear(self.num_final_features, self.output_size)
 
     def forward(self, graph):
@@ -93,7 +92,6 @@ class CCN1D(nn.Module):
         self.shrinked_message = []
 
         for layer in range(self.nLayers):
-            # print("Layer", layer)
 
             # Message Passing
             input_receptive_field = self.edges_rf[layer][0]
@@ -117,8 +115,6 @@ class CCN1D(nn.Module):
 
             self.message.append(h)
             self.shrinked_message.append(ccn1d_shrinking.apply(graph.nVertices, output_start_index, h, self.nThreads))
-
-            # print("Message Passing")
 
         # Total representation
         self.total_representation = torch.cat([dense_feature] + self.shrinked_message, dim=1)
